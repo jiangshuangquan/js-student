@@ -1871,6 +1871,96 @@ var func = {
             }
         }
 
+        //定义子类
+        B.prototype = inherit(A.prototype);//子类派生自父类
+        B.prototype.constructor = B;//重载继承来的constructor属性
+        //这两行代码是js中创建子类的关键，如果不这样做，原型对象仅仅是一个普通对象，它只继承自Object.prototype.这意味着你的类和所有的类一样是Object的子类。如果这两行代码添加至defineClass()函数中，可以将它变成例9-11中的defineSubclass()函数和Function.prototype.extend()方法
+        //用一个简单的函数创建简单的子类
+        function defineSubcalss(superclass,//父类的构造函数
+                                constructor,//新的子类构造函数
+                                methods,//实例方法：复制至原型中
+                                statics) {//类属性：复制至构造函数中
+            //建立子类的原型对象
+            constructor.prototype = inherit(superclass.prototype);
+            constructor.prototype.constructor = constructor;
+            //像对常规类一样复制方法和类属性
+            if(methods) extend(constructor.prototype,methods);
+            if(statics) extend(constructor,statics);
+            //返回这个类
+            return constructor;
+        }
+        //也可以通过父类构造函数的方法来做到这一点
+        Function.prototype.extend = function (constructor,methods,statics) {
+            return defineSubcalss(this,constructor,methods,statics);
+        }
+        //一个简单的子类
+        function SingletonSet(member) {
+            this.member = member;//记住集合中唯一成员
+        }
+        //创建一个继承自Set的原型的原型对象
+        SingletonSet.prototype = inherit(Set.prototype);
+        //给原型添加属性，如果有同名属性，则覆盖
+        extend(SingletonSet.prototype,{
+            //设置合适的construtor属性
+            constructor:SingletonSet,
+            //这个集合是只读的：调用add()和remove()都会报错
+            add:function () {throw "red-only set"},
+            remove:function () {throw "red-only set"},
+            //SingletonSet实例中永远只有一个元素
+            size:function () {return 1;},
+            //这个方法只调用一次，传入这个集合的唯一成员
+            foreach:function (f,context) {f.call(context,this.member)},
+            //contains()：检查传入的值是否匹配这个集合唯一成员
+            contains:function (x) {
+                return x === this.member;
+            }
+        })
+        //定义自己的equals版本
+        SingletonSet.prototype.equals = function (that) {
+            return that instanceof  Set && that.size()==1&&that.contains((this.member))
+        };
+
+        //定义不可枚举的属性，将代码包装在一个匿名函数中，这样定义的变量就在这个函数作用域内
+        (function () {
+            //定义一个不可枚举属性objectId，它可以被所有对象继承，当读取这个属性是调用getter函数，没有定义setter，因此它是只读的，它是不可配置的，因此它是不能删除的
+            Object.defineProperty(Object.prototype,"objectId",{
+                get:idGetter,//取值器
+                enumerable:false,
+                configurable:false
+            });
+            //当读取objectId的时候直接调用这个getter函数
+            function idGetter() {//getter函数返回该id
+                if(!(idprop in this)){//如果对象中不存在id
+                    if(!Object.isExtensible(this)){//并且可以增加属性
+                        throw Error("Can't define id for nonextensible objects")
+                    }
+                    Object.defineProperty(this,idprop,{//给他一个值
+                        value:nextid++,
+                        writable:false,//只读
+                        enumerable:false,//不可枚举
+                        configurable:false//不可删除的
+                    });
+                }
+                return this[idprop];//返回已有的或新的值
+            };
+            //idGetter()遇到了这些变量，这些都属于私有变量
+            var idprop = "|**objectId**|";//假设这个属性没有遇到
+            var nextid = 1;//给他设置初始值
+        }())
+        //创建一个不可变的类，它的属性和方法都是只读的，可以由new调用，也可以省略new，可以做构造函数也可以做工厂函数
+        function Range(from,to) {
+            //这些是对from和to只读属性的描述符
+            var props = {
+                from:{value:from,enumerable:true,writable:false,configurable:false},
+                to:{value:to,enumerable:true,writable:false,configurable:false}
+            };
+            if(this instanceof  Range){//如果作为构造函数来调用
+                Object.defineProperties(this,props);//定义属性
+            }else {//否则，作为工厂方法来调用
+                return Object.create(Range.prototype,props);//创建并返回这个新Range对象，属性有props指定
+            }
+        }
+
     }
 
 };
