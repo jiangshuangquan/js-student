@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<h1>225</h1>
+<script>
+    function moveon(){
+        var answer = confirm('准备好了吗');
+        //点击确定，会弹出一个新页面
+        if(answer)window.location = "http://taobao.com";
+    }
+    //一分钟后执行
+//    setTimeout(moveon,60000)
+
+    //在document中一个指定的区域输出调试信息，如果不存在，则创建一个
+    function debug(msg) {
+        var log = document.getElementById("debuglog");
+
+        if (!log){
+            log = document.createElement("div");
+            log.id = "debuglog";
+            log.innerHTML = "<h1>Debug log</h1>";
+            document.body.appendChild(log);
+        }
+
+        //将信息封装到pre，并添加到log
+        var pre = document.createElement("pre");
+        var text = document.createTextNode(msg);//将msg包装在一个文本节点中
+        pre.appendChild(text);
+        log.appendChild(pre);
+    }
+
+    function hide(e,reflow) {//隐藏样式
+        if(reflow){
+            e.style.display = "none"
+        }else {
+            e.style.visibility = "hidden"
+        }
+    }
+
+    function highlight(e){//高亮显示元素
+        if(!e.className){
+            e.className = "hilite"
+        }else {
+            e.className += "hilite"
+        }
+    }
+
+    //load事件只有在文本加载完成后才会触发
+    //通常等load事件触发后才考试执行javascript
+//    window.onload = function () {
+//        var images = document.getElementsByTagName("img");
+//
+//        for(var i= 0 ;i<images.length;i++){
+//            var image = images[i];
+//            if(image.addEventListener){//注册事件处理程序的一种方法
+//                image.addEventListener("click",hide,false);
+//            }else {
+//                image.attachEvent("onclick",hide)
+//            }
+//        }
+//        function  hide(event) {
+//            event.target.style.visibility = "hidden";
+//        }
+//    }
+    var geval = eval;//使用别名调用eval将是全局eval
+    var x = "global",y = "global";
+    function f() {//函数内执行的是局部eval
+        var x = "local";
+        eval("x+='changed';");//改变局部变量值
+        return x;
+    }
+    function g() {//
+        var y = "local";
+        geval("y+='changed';");//间接调用改变了全局变量的值
+        return y;
+    }
+    //console.log(f(),"####"+x);//更改了局部变量的值，输出"local changed global"
+    //console.log(g(),"####"+y);//更改了全局变量的值输出“local globalchanged”
+
+    function memorize(f) {
+        var cache = {};
+        return function () {
+            //将实参转换为字符串形式，并将其用做缓存的键
+            var key = arguments.length + Array.prototype.join.call(arguments,",");
+            console.log(arguments.length,Array.prototype.join.call(arguments,","),key)
+            if(key in cache) return cache[key];
+            else return cache[key] = f.apply(this,arguments)
+        }
+    };
+    function gcd(a,b) {
+        var t;
+        if(a<b) t =b,b =a, a=t;//确保a>=b
+        while(b != 0) t=b,b=a%b,a=t;//求最大公约数
+        return a;
+    }
+    var gcdmemo = memorize(gcd);
+//    console.log(gcdmemo(85,187))
+    function Range(from,to) {
+        //存储起始位置和结束位置，不可继承，每个对象都有唯一属性
+        this.from = from;
+        this.to = to;
+    }
+    Range.prototype = {
+        includes:function (x) {
+            return this.from <= x && x <=this.to;
+        },
+        //对范围内的每个整数都调用一次f
+        foreach:function (f) {
+            for(var x = Math.ceil(this.from);x<=this.to;x++) f(x);
+        },
+        toString:function () {return "("+this.from+"..."+this.to+")";}
+    }
+    var r = new Range(1,3);
+    console.log( r instanceof Range)
+    console.log( r instanceof Object)
+
+
+</script>
+</body>
+</html>
