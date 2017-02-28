@@ -1960,6 +1960,148 @@ var func = {
                 return Object.create(Range.prototype,props);//创建并返回这个新Range对象，属性有props指定
             }
         }
+        //将o的指定名字（或所有）的属性设置为不可写的和不可配置的
+        function freezeProps(o) {
+            var props = (arguments.length == 1)//如果参数只有一个
+                ?Object.getOwnPropertyNames(o)//使用所有的属性
+                :Array.prototype.splice.call(arguments,1);//否则传入指定名字的属性
+            props.forEach(function (n) {//将他们都设置为只读和不可变的
+                //忽略不可配置的属性
+                if(!Object.getOwnPropertyDescriptor(o,n).configurable) return;
+                Object.defineProperty(o,n,{writable:false,configurable:false})
+            });
+            return o;//所以我们可以继续使用它
+        }
+        //将o指定名字（或所有）的属性设置为不可枚举的和可配置的
+        function hideProps(o) {
+            var props = (arguments.length == 1)//如果参数只有一个
+                ?Object.getOwnPropertyNames(o)//使用所有的属性
+                :Array.prototype.splice.call(arguments,1);//否则传入指定名字的属性
+            props.forEach(function (n) {
+                //忽略不可配置属性
+                if(!Object.getOwnPropertyDescriptor(o,n).configurable) return;
+                Object.defineProperty(o,n,{writable:false,enumerable:false})
+            })
+            return o;
+        }
+        //通过getter和setter方法将状态变量更健壮地封装起来，这两个方法是无法删除的
+        function Range(from,to) {
+            if(from > to) throw new Error("Range :from must be <= to");
+            //定义存取器方法以维持不变
+            function getFrom() {return from}
+            function getTo() {return to;}
+            function setFrom(f) {
+                if(f<=to) from = f;
+                else throw Error("Range:from must be <= to");
+            }
+            function setTo(t) {
+                if(t >=from) to = t;
+                else throw new Error("Range:to must be >=from");
+            }
+            //可枚举、不可配置
+            Object.defineProperties(this,{
+                from:{get:getFrom,set:setFrom,enumerable:true,configurable:false},
+                to:{get:getTo,set:setTo,enumerable:true,configurable:false}
+            })
+        }
+        //防止类的扩展。Object.preventExtensions()可以将对象设置为不可扩展的，也就是说不能给对象添加任何新属性。Object.seal()则更加强大，它除了能阻止用户给对象添加新属性，还能将当前已有属性设置为不可配置的，这样就不能删除属性了（但不可配置属性也是可写的，也可以转化为只读属性）
+        Object.seal(Object.prototype);
+        //js的另一个动态特性是，对象方法可以随时替换，一种是用上面定义的freezeProps()工具函数，另一种方法是使用Object.freeze()，它和Object.seal()完全一样，把所有属性设置为只读和不可配置
+        /**
+         * Object.prototype定义properties方法，返回一个调用对象上的属性名列表对象，如果不带参数调用它，就表示该对象的所有属性
+         * 返回的对象定义了4个有用的方法：toString（），descriptors(),hide()和show()
+         */
+        (function namespace() {//将所有逻辑闭包在一个私有函数作用域中
+            //这个函数成为所有对象的方法
+            function properties() {
+                var names;//属性名组成的数组
+                if(arguments.length == 0){//所有的自有属性
+                    names = Object.getOwnPropertyNames(this);
+                }else if(arguments.length == 1&&Array.isArray(arguments[0])){
+                    names = arguments[0];//名字组成的数组
+                }else {//参数列表本身就是名字
+                    names = Array.prototype.splice.call(arguments,0)
+                }
+                //返回一个新的Properties对象，用以表示属性名字
+                return new Properties(this,names)
+            }
+            //将它设置为Object.prototype的新的不可枚举属性
+            //这是私有函数作用域导出的唯一一个值
+            Object.defineProperty(Object.prototype,"properties",{
+                value:properties,
+                enumerable:false,writable:true,configurable:true
+            });
+            //这个构造函数是由上面的properties()函数所调用的
+            //Properties类表示一个对象的属性集合
+            function Properties(o,names) {
+                this.o = o;//属性所属对象
+                this.names = names;//属性名字
+            }
+            //将代表这些属性的对象设置为不可枚举
+            Properties.prototype.hide = function () {
+                var o = this.o,hidden = {enumerable:false};
+                this.names.forEach(function (n) {
+                    if(o.hasOwnProperty(n)){
+                        Object.defineProperty(o,n,hidden)
+                    }
+                })
+                return this
+            }
+            //将这些属性设置为只读的和不可配置的
+            Properties.prototype.freeze = function () {
+                var o=this.o,frozen={writable:false,configurable:false};
+                this.names.forEach(function (n) {
+                    if(o.hasOwnProperty(n)){
+                        Object.defineProperty(o,n,hidden)
+                    }
+                })
+                return this
+            }
+            //返回一个对象，这个对象是名字到属性描述符的映射表
+            //使用它来复制属性，连同属性特性一起复制
+            //Object.defineProperties(dest,src.properties().descriptors());
+            Properties.prototype.descriptors = function () {
+                var o = this.o,desc = {};
+                this.name.forEach(function (n) {
+                    if(!o.hasOwnProperty(n)) return;
+                    desc[n]=Object.getOwnPropertyDescriptor(o,n)
+                })
+                return desc
+            };
+            //返回一个格式化良好的属性列表
+            //列表中包含名字、值和属性特性，使用“permanent”表示不可配置
+            //使用“readonly”表示不可写，使用“hidden”表示不可枚举
+            //普通的可枚举、可写和可配置属性不包含特性列表
+            Properties.prototype.toString = function () {
+                var o = this.o;//在下面嵌套函数中使用
+                var lines = this.names.map(nameToString);
+                return "{\n"+lines.join(",\n")+"\n}";
+                function nameToString(n) {
+                    var s = "",desc = Object.getOwnPropertyDescriptor(o,n);
+                    if(!desc)return "nonexistent"+n+":undefined";
+                    if(!desc.configurable) s+="permanent";
+                    if((desc.get&&!desc.set)||!desc.writable)s+="readonly";
+                    if(!desc.enumerable)s+="hidden";
+                    if(desc.get||desc.set)s+="accessor"+n;
+                    else  s+=n+":"+((typeof desc.value === "function")?"function":desc.value);
+                    return s;
+                }
+            }
+            //最后将原型中的实例方法设置为不可枚举的，这里用到了刚定义的方法
+            Properties.prototype.properties().hide();
+        }());
+
+        //通过模块定义在某个函数内部来实现，模块对外导出一些共用的API，包括函数、类、属性和方法
+        //声明全局变量Set，使用一个函数返回值给它赋值，它的返回值将赋值给Set，而不是将这个函数赋值给Set
+        //注意它是一个函数表达式，不是一条语句，因此函数“invocation”并没有创建全局变量
+        var Set = (function invocation() {
+            function Set() {//这个构造函数是局部变量
+                this.values = {};//这个对象的属性用来保存这个集合
+                this.n=o;//集合中的个数
+                this.add.apply(this,arguments);//将所有参数都添加都集合中
+            }
+            //263
+        }())
 
     }
 
